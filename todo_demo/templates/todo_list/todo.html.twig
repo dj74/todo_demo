@@ -1,0 +1,167 @@
+{# templates/todo_list/todo.html.twig #}
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" />
+<link rel="stylesheet" href="{{ asset('css/todo_list.css') }}" />
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+<div class="row"><div class="col-12 text-center"><h1>TODO List</h1></div></div>
+<div class="row">
+    <div class="col-1"></div>
+    <div class="col-3">
+        <button type="button" class="btn btn-success w-100 mb-4" data-toggle="modal" data-target="#TodoItemModal">Create New TODO</button>
+    </div>
+    <div class="col-8"></div>
+</div>
+<div class="row">
+    <div class="col-1"></div>
+    <div class="col-3">
+        <div id="pending_items" class="card box-shadow drop-target" ondrop="onDrop(event, this)" ondragover="onDragOver(event)">
+            <div class="text-light bg-dark card-heading text-center"><h4 class="my-0 font-weight-normal">To Do / Not Started</h4></div>
+            <div class="card-body item-container">
+            {% for ti in pending_items %}
+                {{ include('components/todoitem.html.twig', { item: ti }) }}
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-3">
+        <div id="started_items" class="card box-shadow drop-target" ondrop="onDrop(event, this)" ondragover="onDragOver(event)">
+            <div class="text-light bg-dark card-heading text-center"><h4 class="my-0 font-weight-normal">In Progress</h4></div>
+            <div class="card-body item-container">
+            {% for ti in started_items %}
+                {{ include('components/todoitem.html.twig', { item: ti }) }}
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-3">
+        <div id="completed_items" class="card box-shadow drop-target" ondrop="onDrop(event, this)" ondragover="onDragOver(event)">
+            <div class="text-light bg-dark card-heading text-center"><h4 class="my-0 font-weight-normal">Completed</h4></div>
+            <div class="card-body item-container">
+            {% for ti in completed_items %}
+                {{ include('components/todoitem.html.twig', { item: ti }) }}
+            {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-2"></div>
+</div>
+
+<!-- The New TODO Item Modal -->
+<div class="modal fade" id="TodoItemModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h4 class="modal-title">New TODO Item</h4>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+
+            <!-- Modal body -->
+            <div class="modal-body">
+                {{ form(todoitem_form) }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function onDragOver(ev) {
+        ev.preventDefault();
+    }
+
+    function onDragStart(ev) {
+        ev.dataTransfer.setData("id", ev.currentTarget.id);
+        ev.dataTransfer.setData("status", ev.currentTarget.dataset.status);
+    }
+
+    function onDrop(ev, el) {
+        if(ev.currentTarget.classList.contains('drop-target')) {
+            ev.preventDefault();
+            var id = ev.dataTransfer.getData("id");
+            var status = ev.dataTransfer.getData("status");
+            // only allow drop from pending to started, or when from pending/started to completed
+            switch(ev.currentTarget.id) {
+                case "completed_items":
+                    if(status == "0" || status == "1") {
+                        updateEntity(id, 2);
+                        let target = el.querySelector('.item-container');
+                        target.appendChild(document.getElementById(id));
+                    }
+                    break;
+                case "started_items":
+                    if(status == "0") {
+                        updateEntity(id, 1);
+                        let target = el.querySelector('.item-container');
+                        target.appendChild(document.getElementById(id));
+                    }
+                    break;
+                default:
+                    break;
+            }
+            ev.dataTransfer.clearData();
+        }
+    }
+
+    $('#TodoItemModal').on('show.bs.modal', function (event) {
+        // reset modal
+        //$("#TodoItemModal").find("input, textarea").val('').end()
+
+        // get and check for id => is new or edit
+        let button = $(event.relatedTarget);
+        let id = button.data("itemid");
+
+        let modal = $(this);
+        $('label[for="todo_item_status"]').hide(); $('#todo_item_status').hide();
+        $('label[for="todo_item_creation_ts"]').hide(); $('#todo_item_creation_ts').hide();
+        $('label[for="todo_item_start_ts"]').hide(); $('#todo_item_start_ts').hide();
+        $('label[for="todo_item_completed_ts"]').hide(); $('#todo_item_completed_ts').hide();
+
+        if(id != null) { // edit
+            modal.find('.modal-title').text('Edit Todo Item');
+
+            $('#todo_item_id').val(id);
+            $('#todo_item_title').val($('#'+id+'-title').text());
+            $('#todo_item_description').val($('#'+id+'-description').text());
+
+            let item = $(button).closest('.todoitem');
+            $('#todo_item_status').val(item.data("status"));
+            $('#todo_item_creation_ts').val(item.data("creation_ts"));
+            $('#todo_item_start_ts').val(item.data("start_ts"));
+            $('#todo_item_completed_ts').val(item.data("completed_ts"));
+        }
+    })
+
+    function updateEntity(id, status) {
+        $.ajax({
+            type: 'POST',
+            url: '/todo/update',
+            async: false,
+            dataType: 'JSON',
+            data: {'id': id, 'status': status},
+            success: function(data) {
+                if(data.success == false) {
+                    alert('error in communication to server');
+                }
+            }
+        });
+    }
+
+    function removeEntity(id) {
+        $.ajax({
+            type: 'POST',
+            url: '/todo/remove',
+            async: false,
+            dataType: 'JSON',
+            data: {'id': id},
+            success: function(data) {
+                if(data.success == false) {
+                    alert('error in communication to server');
+                } else {
+                    $("#"+id).remove();
+                }
+            }
+        });
+    }
+</script>
